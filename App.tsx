@@ -3,7 +3,7 @@ import { User, UserRole, BaseArea, VehicleOwner, VehicleType, Rider } from './ty
 import { ApiService } from './services/mockBackend';
 import { Button, Input, Card, Modal, Select } from './components/ui';
 import { APP_NAME, CURRENCY_SYMBOL, SUBSCRIPTION_COST, SUBSCRIPTION_DAYS, DEFAULT_LAT, DEFAULT_LNG, VEHICLE_IMAGES } from './constants';
-import { MapPin, Navigation, Phone, Menu, X, CheckCircle, AlertTriangle, LogOut, Car, LayoutDashboard, Settings, Loader2, Sun, Moon, Map as MapIcon, List, Edit2, Trash2, Key, CreditCard } from 'lucide-react';
+import { MapPin, Navigation, Phone, Menu, X, CheckCircle, AlertTriangle, LogOut, Car, LayoutDashboard, Settings, Loader2, Sun, Moon, Map as MapIcon, List, Edit2, Trash2, Key, CreditCard, ExternalLink, RefreshCw } from 'lucide-react';
 
 // --- Theme Component ---
 const ThemeToggle = () => {
@@ -38,6 +38,150 @@ const ThemeToggle = () => {
     <button onClick={toggle} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300" aria-label="Toggle Dark Mode">
       {isDark ? <Sun size={20} /> : <Moon size={20} />}
     </button>
+  );
+};
+
+// --- Reusable Payment Processor Component ---
+const PaymentProcessor = ({ userId, isOpen, onClose, onSuccess }: { userId: string, isOpen: boolean, onClose: () => void, onSuccess: (user: User) => void }) => {
+  const [status, setStatus] = useState<'idle' | 'creating' | 'waiting' | 'verifying' | 'success' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStatus('idle');
+      setErrorMsg('');
+    }
+  }, [isOpen]);
+
+  const handleInitiatePayment = async () => {
+    setStatus('creating');
+    setErrorMsg('');
+    try {
+      const res = await ApiService.createPaymentOrder(userId);
+      if (res.success && res.data?.paymentLink) {
+        // Open payment link
+        window.open(res.data.paymentLink, '_blank');
+        setStatus('waiting');
+      } else {
+        throw new Error(res.message || "Failed to generate payment link.");
+      }
+    } catch (e: any) {
+      console.error("Payment Init Error:", e);
+      setStatus('error');
+      setErrorMsg(e.message || "Could not connect to payment gateway.");
+    }
+  };
+
+  const handleVerifyPayment = async () => {
+    setStatus('verifying');
+    try {
+      const res = await ApiService.confirmPayment(userId);
+      if (res.success && res.data) {
+        setStatus('success');
+        setTimeout(() => {
+          onSuccess(res.data!);
+          onClose();
+        }, 2000);
+      } else {
+        throw new Error(res.message || "Payment verification failed.");
+      }
+    } catch (e: any) {
+      console.error("Payment Verify Error:", e);
+      setStatus('error');
+      setErrorMsg(e.message || "Could not verify payment. If amount was deducted, please contact support.");
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Renew Subscription">
+      <div className="space-y-6">
+        {/* Header Info */}
+        <div className="text-center space-y-2">
+          <p className="text-slate-600 dark:text-slate-300">
+            Pay <strong>{CURRENCY_SYMBOL}{SUBSCRIPTION_COST}</strong> to extend service for <strong>{SUBSCRIPTION_DAYS} days</strong>.
+          </p>
+          <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg text-xs text-left space-y-1 border border-slate-100 dark:border-slate-700">
+            <div className="flex justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Gateway</span>
+              <span className="font-medium dark:text-slate-200">Cashfree (Secure)</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Plan</span>
+              <span className="font-medium dark:text-slate-200">Standard Renewal</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Area based on Status */}
+        <div className="space-y-4">
+          
+          {status === 'idle' && (
+            <Button onClick={handleInitiatePayment} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              Pay Now Securely
+            </Button>
+          )}
+
+          {status === 'creating' && (
+             <div className="flex flex-col items-center py-4 space-y-2 text-slate-500">
+               <Loader2 className="animate-spin text-blue-600" size={32} />
+               <p>Creating Secure Order...</p>
+             </div>
+          )}
+
+          {status === 'waiting' && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-center space-y-4 animate-in fade-in">
+              <div className="mx-auto w-12 h-12 bg-amber-100 dark:bg-amber-900/50 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400">
+                <ExternalLink size={24} />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 dark:text-white">Payment Page Opened</h4>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Please complete the payment in the new browser tab.</p>
+              </div>
+              <Button onClick={handleVerifyPayment} variant="secondary" className="w-full">
+                I Have Completed Payment
+              </Button>
+              <button onClick={handleInitiatePayment} className="text-xs text-slate-400 hover:underline">
+                Link didn't open? Click to retry
+              </button>
+            </div>
+          )}
+
+          {status === 'verifying' && (
+             <div className="flex flex-col items-center py-4 space-y-2 text-slate-500">
+               <Loader2 className="animate-spin text-green-600" size={32} />
+               <p>Verifying Transaction...</p>
+             </div>
+          )}
+
+          {status === 'success' && (
+             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6 text-center space-y-2 animate-in zoom-in">
+               <div className="mx-auto w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                 <CheckCircle size={24} />
+               </div>
+               <h4 className="font-bold text-green-700 dark:text-green-300">Payment Successful!</h4>
+               <p className="text-sm text-green-600 dark:text-green-400">Your subscription has been renewed.</p>
+             </div>
+          )}
+
+          {status === 'error' && (
+             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-center space-y-3 animate-in shake">
+               <div className="mx-auto w-12 h-12 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center text-red-600 dark:text-red-400">
+                 <AlertTriangle size={24} />
+               </div>
+               <div>
+                 <h4 className="font-bold text-red-700 dark:text-red-300">Transaction Failed</h4>
+                 <p className="text-sm text-red-600 dark:text-red-400">{errorMsg}</p>
+               </div>
+               <div className="flex gap-2">
+                 <Button onClick={() => setStatus('waiting')} variant="outline" className="flex-1 text-xs">Try Verify Again</Button>
+                 <Button onClick={handleInitiatePayment} variant="primary" className="flex-1 text-xs">New Payment</Button>
+               </div>
+             </div>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 };
 
@@ -526,26 +670,6 @@ const OwnerDashboard = ({ user, onUpdateUser, onLogout }: { user: VehicleOwner, 
     setIsToggling(false);
   };
 
-  const handlePayment = async () => {
-    // Simulate Payment Flow
-    const res = await ApiService.createPaymentOrder(user.id);
-    if(res.success && res.data?.paymentLink) {
-      window.open(res.data.paymentLink, '_blank');
-      // In a real app we would wait for webhook, here we simulate a check after delay or explicit check button
-      setTimeout(async () => {
-         // Try to verify
-         const confirmRes = await ApiService.confirmPayment(user.id);
-         if (confirmRes.success && confirmRes.data) {
-           onUpdateUser(confirmRes.data);
-           setPaymentModalOpen(false);
-           alert("Payment Verified! Subscription renewed.");
-         }
-      }, 5000);
-    } else {
-        alert("Could not create payment link");
-    }
-  };
-
   const daysLeft = Math.ceil((new Date(user.expiresAt).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
 
   return (
@@ -620,16 +744,12 @@ const OwnerDashboard = ({ user, onUpdateUser, onLogout }: { user: VehicleOwner, 
       </main>
 
       {/* Modals */}
-      <Modal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} title="Renew Subscription">
-        <div className="space-y-4 text-center">
-          <p className="text-slate-600 dark:text-slate-300">Pay <strong>{CURRENCY_SYMBOL}{SUBSCRIPTION_COST}</strong> to extend your service for <strong>{SUBSCRIPTION_DAYS} days</strong>.</p>
-          <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg text-sm text-left dark:text-slate-300">
-            <p><strong>Gateway:</strong> Cashfree (Test Mode)</p>
-            <p><strong>Plan:</strong> Standard Partner</p>
-          </div>
-          <Button onClick={handlePayment} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Pay Securely</Button>
-        </div>
-      </Modal>
+      <PaymentProcessor 
+        userId={user.id} 
+        isOpen={paymentModalOpen} 
+        onClose={() => setPaymentModalOpen(false)} 
+        onSuccess={onUpdateUser} 
+      />
 
       <ProfileModal 
         user={user} 
@@ -675,24 +795,6 @@ const RiderDashboard = ({ user, onUpdateUser, onLogout }: { user: Rider, onUpdat
   // Subscription Logic
   const daysLeft = Math.ceil((new Date(user.expiresAt).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
   const isExpired = daysLeft <= 0;
-
-  const handlePayment = async () => {
-    const res = await ApiService.createPaymentOrder(user.id);
-    if(res.success && res.data?.paymentLink) {
-      window.open(res.data.paymentLink, '_blank');
-      // Simulate verification after delay
-      setTimeout(async () => {
-         const confirmRes = await ApiService.confirmPayment(user.id);
-         if (confirmRes.success && confirmRes.data) {
-           onUpdateUser(confirmRes.data);
-           setSubscriptionModalOpen(false);
-           alert("Payment Verified! Subscription renewed.");
-         }
-      }, 5000);
-    } else {
-        alert("Could not create payment link");
-    }
-  };
 
   // Helper to position pins on the mock map (relative to DEFAULT_LAT/LNG)
   const getMapMarkerStyle = (lat: number, lng: number) => {
@@ -869,44 +971,13 @@ const RiderDashboard = ({ user, onUpdateUser, onLogout }: { user: Rider, onUpdat
          )}
       </Modal>
 
-      {/* Subscription Modal */}
-      <Modal isOpen={subscriptionModalOpen} onClose={() => setSubscriptionModalOpen(false)} title="My Subscription">
-         <div className="space-y-6">
-            <div className={`p-4 rounded-xl ${isExpired ? 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300'}`}>
-               <p className="text-sm font-medium opacity-80 mb-1">Current Status</p>
-               <div className="flex items-center gap-2 text-2xl font-bold">
-                 {isExpired ? <AlertTriangle size={24}/> : <CheckCircle size={24}/>}
-                 {isExpired ? 'Expired' : 'Active'}
-               </div>
-               <p className="mt-2 text-sm">
-                 {isExpired 
-                   ? `Your plan expired ${Math.abs(daysLeft)} days ago.` 
-                   : `Your plan is valid for another ${daysLeft} days.`
-                 }
-               </p>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="font-semibold text-slate-900 dark:text-white">Plan Details</h4>
-              <div className="flex justify-between text-sm py-2 border-b dark:border-slate-800">
-                <span className="text-slate-500 dark:text-slate-400">Duration</span>
-                <span className="font-medium dark:text-slate-200">{SUBSCRIPTION_DAYS} Days</span>
-              </div>
-              <div className="flex justify-between text-sm py-2 border-b dark:border-slate-800">
-                <span className="text-slate-500 dark:text-slate-400">Cost</span>
-                <span className="font-medium dark:text-slate-200">{CURRENCY_SYMBOL}{SUBSCRIPTION_COST}</span>
-              </div>
-            </div>
-
-            <Button onClick={handlePayment} className="w-full">
-              {isExpired ? 'Renew Now' : 'Extend Plan'} ({CURRENCY_SYMBOL}{SUBSCRIPTION_COST})
-            </Button>
-            
-            <p className="text-xs text-center text-slate-400 dark:text-slate-500">
-              Payment secured by Cashfree.
-            </p>
-         </div>
-      </Modal>
+      {/* Reused Payment Processor Modal */}
+      <PaymentProcessor 
+        userId={user.id} 
+        isOpen={subscriptionModalOpen} 
+        onClose={() => setSubscriptionModalOpen(false)} 
+        onSuccess={onUpdateUser} 
+      />
 
       <ProfileModal 
         user={user} 
