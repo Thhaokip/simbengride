@@ -379,11 +379,12 @@ const AuthView = ({ mode, role, onLoginSuccess, onBack, onNavigate }: { mode: 'l
 };
 
 // 3. Admin Dashboard
-const AdminDashboard = ({ user, onLogout }: { user: User, onLogout: () => void }) => {
+const AdminDashboard = ({ user, onUpdateUser, onLogout }: { user: User, onUpdateUser: (u: User) => void, onLogout: () => void }) => {
   const [areas, setAreas] = useState<BaseArea[]>([]);
   const [areaName, setAreaName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const fetchAreas = useCallback(async () => {
     const res = await ApiService.getBaseAreas();
@@ -431,6 +432,9 @@ const AdminDashboard = ({ user, onLogout }: { user: User, onLogout: () => void }
           <h1 className="text-2xl font-bold dark:text-white">Admin Dashboard</h1>
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            <Button variant="outline" className="!p-2" onClick={() => setProfileModalOpen(true)}>
+               <Settings size={20} className="text-slate-600 dark:text-slate-300" />
+            </Button>
             <Button variant="outline" onClick={onLogout} className="!py-2"><LogOut size={16} /> Logout</Button>
           </div>
         </div>
@@ -466,6 +470,13 @@ const AdminDashboard = ({ user, onLogout }: { user: User, onLogout: () => void }
             ))}
           </div>
         </Card>
+
+        <ProfileModal 
+          user={user} 
+          isOpen={profileModalOpen} 
+          onClose={() => setProfileModalOpen(false)} 
+          onUpdate={onUpdateUser} 
+        />
       </div>
     </div>
   );
@@ -954,7 +965,7 @@ const App = () => {
         return <AuthView mode="register" role={UserRole.OWNER} onLoginSuccess={handleLogin} onBack={() => setView('landing')} onNavigate={setView} />;
       
       case 'dashboard-admin': 
-        return user ? <AdminDashboard user={user} onLogout={handleLogout} /> : <LandingView onNavigate={setView} />;
+        return user ? <AdminDashboard user={user} onUpdateUser={handleUpdateUser} onLogout={handleLogout} /> : <LandingView onNavigate={setView} />;
       
       case 'dashboard-owner': 
         return user ? <OwnerDashboard user={user as VehicleOwner} onUpdateUser={handleUpdateUser} onLogout={handleLogout} /> : <LandingView onNavigate={setView} />;
