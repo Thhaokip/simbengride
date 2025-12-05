@@ -3,7 +3,7 @@ import { User, UserRole, BaseArea, VehicleOwner, VehicleType, Rider } from './ty
 import { ApiService } from './services/mockBackend';
 import { Button, Input, Card, Modal, Select } from './components/ui';
 import { APP_NAME, CURRENCY_SYMBOL, SUBSCRIPTION_COST, SUBSCRIPTION_DAYS, DEFAULT_LAT, DEFAULT_LNG, VEHICLE_IMAGES } from './constants';
-import { MapPin, Navigation, Phone, Menu, X, CheckCircle, AlertTriangle, LogOut, Car, LayoutDashboard, Settings, Loader2, Sun, Moon, Map as MapIcon, List, Edit2, Trash2, Key } from 'lucide-react';
+import { MapPin, Navigation, Phone, Menu, X, CheckCircle, AlertTriangle, LogOut, Car, LayoutDashboard, Settings, Loader2, Sun, Moon, Map as MapIcon, List, Edit2, Trash2, Key, CreditCard } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 // --- Theme Component ---
@@ -638,15 +638,65 @@ const RiderDashboard = ({ user, onUpdateUser, onLogout }: { user: Rider, onUpdat
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleOwner | null>(null);
   const [view, setView] = useState<'list' | 'map'>('list');
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
 
   const fetchVehicles = useCallback(async () => {
-    setLoading(true);
+    // Show loading only on first fetch or list view, to avoid flicker on map polling
+    if(vehicles.length === 0) setLoading(true);
     const res = await ApiService.getVehiclesNearby(DEFAULT_LAT, DEFAULT_LNG);
     if (res.data) setVehicles(res.data);
     setLoading(false);
-  }, []);
+  }, []); // Remove dependency on 'vehicles.length' to allow proper polling, handled inside.
 
-  useEffect(() => { fetchVehicles(); }, [fetchVehicles]);
+  useEffect(() => { fetchVehicles(); }, []);
+
+  // Polling for Map View
+  useEffect(() => {
+    let intervalId: ReturnType<typeof setInterval>;
+    if (view === 'map') {
+      fetchVehicles(); // Fetch immediately on switch
+      intervalId = setInterval(fetchVehicles, 10000); // Poll every 10 seconds
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [view, fetchVehicles]);
+
+  // Subscription Logic
+  const daysLeft = Math.ceil((new Date(user.expiresAt).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+  const isExpired = daysLeft <= 0;
+
+  const handlePayment = async () => {
+    const res = await ApiService.createPaymentOrder(user.id);
+    if(res.success && res.data?.paymentLink) {
+      window.open(res.data.paymentLink, '_blank');
+      // Simulate verification after delay
+      setTimeout(async () => {
+         const confirmRes = await ApiService.confirmPayment(user.id);
+         if (confirmRes.success && confirmRes.data) {
+           onUpdateUser(confirmRes.data);
+           setSubscriptionModalOpen(false);
+           alert("Payment Verified! Subscription renewed.");
+         }
+      }, 5000);
+    } else {
+        alert("Could not create payment link");
+    }
+  };
+
+  // Helper to position pins on the mock map (relative to DEFAULT_LAT/LNG)
+  const getMapMarkerStyle = (lat: number, lng: number) => {
+    // Zoom level: approx 0.05 degrees variance from center (roughly 5km radius)
+    const RANGE = 0.05; 
+    const xPercent = 50 + ((lng - DEFAULT_LNG) / RANGE) * 50;
+    const yPercent = 50 - ((lat - DEFAULT_LAT) / RANGE) * 50;
+    
+    // Clamp to keep within view
+    return {
+      left: `${Math.min(95, Math.max(5, xPercent))}%`,
+      top: `${Math.min(95, Math.max(5, yPercent))}%`
+    };
+  };
 
   // Mock Distance Calculation (approximate)
   const getDistance = (v: VehicleOwner) => {
@@ -668,6 +718,12 @@ const RiderDashboard = ({ user, onUpdateUser, onLogout }: { user: Rider, onUpdat
         <h1 className="font-bold text-lg dark:text-white">{APP_NAME}</h1>
         <div className="flex items-center gap-3">
           <ThemeToggle />
+          
+          {/* Subscription Button */}
+          <Button variant="outline" className={`!p-2 ${isExpired ? 'text-red-500 border-red-200 dark:border-red-900' : 'text-slate-600 dark:text-slate-300'}`} onClick={() => setSubscriptionModalOpen(true)}>
+             <CreditCard size={20} />
+          </Button>
+          
           <Button variant="outline" className="!p-2" onClick={() => setView(view === 'list' ? 'map' : 'list')}>
              {view === 'list' ? <MapIcon size={20} className="text-slate-600 dark:text-slate-300"/> : <List size={20} className="text-slate-600 dark:text-slate-300"/>}
           </Button>
@@ -678,48 +734,91 @@ const RiderDashboard = ({ user, onUpdateUser, onLogout }: { user: Rider, onUpdat
         </div>
       </header>
 
-      {view === 'map' ? (
-        <div className="flex-1 bg-slate-200 dark:bg-slate-800 relative flex items-center justify-center">
-           <div className="text-slate-500 dark:text-slate-400 flex flex-col items-center">
-             <MapIcon size={48} className="mb-2 opacity-50"/>
-             <p>Map View Placeholder</p>
-             <p className="text-xs opacity-75">Centered at {DEFAULT_LAT}, {DEFAULT_LNG}</p>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        
+        {/* Expiration Banner */}
+        {isExpired && (
+          <div className="absolute inset-0 z-50 bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mb-4">
+              <AlertTriangle size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Subscription Expired</h2>
+            <p className="text-slate-500 dark:text-slate-400 mb-6">Your plan has ended. Renew now to continue finding rides.</p>
+            <Button onClick={() => setSubscriptionModalOpen(true)} className="w-full max-w-xs">Renew Subscription</Button>
+          </div>
+        )}
+
+        {view === 'map' ? (
+          <div className="flex-1 bg-slate-200 dark:bg-slate-800 relative overflow-hidden">
              
-             {/* Mock Pins */}
-             <div className="absolute top-1/2 left-1/2 transform -translate-x-12 -translate-y-12">
-               <div className="w-8 h-8 bg-amber-500 rounded-full border-4 border-white dark:border-slate-700 shadow-lg animate-bounce"></div>
+             {/* Map Grid / Background decoration */}
+             <div className="absolute inset-0 opacity-10 pointer-events-none" 
+                style={{ 
+                  backgroundImage: 'radial-gradient(circle, #64748b 1px, transparent 1px)', 
+                  backgroundSize: '20px 20px' 
+                }}>
              </div>
-             <div className="absolute top-1/2 left-1/2 transform translate-x-16 translate-y-8">
-               <div className="w-8 h-8 bg-blue-500 rounded-full border-4 border-white dark:border-slate-700 shadow-lg animate-pulse"></div>
+
+             {/* User Location Center */}
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-0">
+               <div className="w-32 h-32 bg-amber-500/10 rounded-full animate-ping absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+               <div className="w-4 h-4 bg-slate-900 dark:bg-white rounded-full ring-4 ring-slate-200 dark:ring-slate-700 shadow-xl relative z-10"></div>
              </div>
-           </div>
-           
-           <Button className="absolute bottom-8 shadow-xl" onClick={fetchVehicles}>Refresh Map</Button>
-        </div>
-      ) : (
-        <main className="flex-1 overflow-y-auto p-4 space-y-4">
-          <h2 className="font-semibold text-slate-700 dark:text-slate-300">Available Vehicles Nearby</h2>
-          {loading ? (
-            <div className="flex justify-center py-12"><Loader2 className="animate-spin text-amber-500"/></div>
-          ) : vehicles.length === 0 ? (
-             <div className="text-center py-12 text-slate-500 dark:text-slate-400">No vehicles found nearby.</div>
-          ) : (
-            vehicles.map(v => (
-              <Card key={v.id} onClick={() => setSelectedVehicle(v)} className="flex items-center gap-4 cursor-pointer hover:border-amber-500 transition-colors">
-                 <img src={VEHICLE_IMAGES[v.vehicleType]} alt={v.vehicleType} className="w-20 h-20 rounded-lg object-cover bg-slate-100 dark:bg-slate-800" />
-                 <div className="flex-1">
-                   <div className="flex justify-between items-start">
-                     <h3 className="font-bold text-slate-900 dark:text-white">{v.vehicleType}</h3>
-                     <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded">{getDistance(v)} km</span>
-                   </div>
-                   <p className="text-sm text-slate-500 dark:text-slate-400">{v.name}</p>
-                   <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">{v.baseArea}</p>
+             
+             {/* Vehicle Pins */}
+             {vehicles.map(v => (
+               <div 
+                 key={v.id}
+                 className="absolute w-10 h-10 -ml-5 -mt-5 cursor-pointer group z-10 transition-all duration-1000 ease-in-out"
+                 style={getMapMarkerStyle(v.lat || DEFAULT_LAT, v.lng || DEFAULT_LNG)}
+                 onClick={() => setSelectedVehicle(v)}
+               >
+                 <div className={`w-10 h-10 rounded-full border-2 border-white dark:border-slate-800 shadow-md flex items-center justify-center transition-transform group-hover:scale-110 ${v.vehicleType === VehicleType.AUTO ? 'bg-amber-500 text-black' : 'bg-blue-600 text-white'}`}>
+                    {v.vehicleType === VehicleType.AUTO ? '🛺' : '🚗'} 
                  </div>
-              </Card>
-            ))
-          )}
-        </main>
-      )}
+                 
+                 {/* Tooltip */}
+                 <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
+                    <span className="font-bold block">{v.name}</span>
+                    <span className="opacity-75">{v.vehicleType}</span>
+                 </div>
+               </div>
+             ))}
+
+             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-900/90 backdrop-blur px-4 py-2 rounded-full shadow-lg text-xs font-medium text-slate-600 dark:text-slate-300 pointer-events-none">
+               Live Updates Active • {vehicles.length} Vehicles
+             </div>
+             
+             <Button className="absolute bottom-6 right-6 shadow-xl !rounded-full !p-3" onClick={fetchVehicles}>
+               <Loader2 size={20} className={loading ? "animate-spin" : ""} />
+             </Button>
+          </div>
+        ) : (
+          <main className="flex-1 overflow-y-auto p-4 space-y-4">
+            <h2 className="font-semibold text-slate-700 dark:text-slate-300">Available Vehicles Nearby</h2>
+            {loading && vehicles.length === 0 ? (
+              <div className="flex justify-center py-12"><Loader2 className="animate-spin text-amber-500"/></div>
+            ) : vehicles.length === 0 ? (
+               <div className="text-center py-12 text-slate-500 dark:text-slate-400">No vehicles found nearby.</div>
+            ) : (
+              vehicles.map(v => (
+                <Card key={v.id} onClick={() => setSelectedVehicle(v)} className="flex items-center gap-4 cursor-pointer hover:border-amber-500 transition-colors">
+                   <img src={VEHICLE_IMAGES[v.vehicleType]} alt={v.vehicleType} className="w-20 h-20 rounded-lg object-cover bg-slate-100 dark:bg-slate-800" />
+                   <div className="flex-1">
+                     <div className="flex justify-between items-start">
+                       <h3 className="font-bold text-slate-900 dark:text-white">{v.vehicleType}</h3>
+                       <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded">{getDistance(v)} km</span>
+                     </div>
+                     <p className="text-sm text-slate-500 dark:text-slate-400">{v.name}</p>
+                     <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">{v.baseArea}</p>
+                   </div>
+                </Card>
+              ))
+            )}
+          </main>
+        )}
+      </div>
 
       {/* Vehicle Detail Modal */}
       <Modal isOpen={!!selectedVehicle} onClose={() => setSelectedVehicle(null)} title="Vehicle Details">
@@ -758,6 +857,45 @@ const RiderDashboard = ({ user, onUpdateUser, onLogout }: { user: Rider, onUpdat
               </div>
            </div>
          )}
+      </Modal>
+
+      {/* Subscription Modal */}
+      <Modal isOpen={subscriptionModalOpen} onClose={() => setSubscriptionModalOpen(false)} title="My Subscription">
+         <div className="space-y-6">
+            <div className={`p-4 rounded-xl ${isExpired ? 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300'}`}>
+               <p className="text-sm font-medium opacity-80 mb-1">Current Status</p>
+               <div className="flex items-center gap-2 text-2xl font-bold">
+                 {isExpired ? <AlertTriangle size={24}/> : <CheckCircle size={24}/>}
+                 {isExpired ? 'Expired' : 'Active'}
+               </div>
+               <p className="mt-2 text-sm">
+                 {isExpired 
+                   ? `Your plan expired ${Math.abs(daysLeft)} days ago.` 
+                   : `Your plan is valid for another ${daysLeft} days.`
+                 }
+               </p>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="font-semibold text-slate-900 dark:text-white">Plan Details</h4>
+              <div className="flex justify-between text-sm py-2 border-b dark:border-slate-800">
+                <span className="text-slate-500 dark:text-slate-400">Duration</span>
+                <span className="font-medium dark:text-slate-200">{SUBSCRIPTION_DAYS} Days</span>
+              </div>
+              <div className="flex justify-between text-sm py-2 border-b dark:border-slate-800">
+                <span className="text-slate-500 dark:text-slate-400">Cost</span>
+                <span className="font-medium dark:text-slate-200">{CURRENCY_SYMBOL}{SUBSCRIPTION_COST}</span>
+              </div>
+            </div>
+
+            <Button onClick={handlePayment} className="w-full">
+              {isExpired ? 'Renew Now' : 'Extend Plan'} ({CURRENCY_SYMBOL}{SUBSCRIPTION_COST})
+            </Button>
+            
+            <p className="text-xs text-center text-slate-400 dark:text-slate-500">
+              Payment secured by Cashfree.
+            </p>
+         </div>
       </Modal>
 
       <ProfileModal 
