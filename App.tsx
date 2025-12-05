@@ -3,7 +3,7 @@ import { User, UserRole, BaseArea, VehicleOwner, VehicleType, Rider } from './ty
 import { ApiService } from './services/mockBackend';
 import { Button, Input, Card, Modal, Select } from './components/ui';
 import { APP_NAME, CURRENCY_SYMBOL, SUBSCRIPTION_COST, SUBSCRIPTION_DAYS, DEFAULT_LAT, DEFAULT_LNG, VEHICLE_IMAGES } from './constants';
-import { MapPin, Navigation, Phone, Menu, X, CheckCircle, AlertTriangle, LogOut, Car, LayoutDashboard, Settings, Loader2, Sun, Moon, Map as MapIcon, List, Edit2, Trash2, Key, CreditCard, ExternalLink, RefreshCw, BarChart3 } from 'lucide-react';
+import { MapPin, Navigation, Phone, Menu, X, CheckCircle, AlertTriangle, LogOut, Car, LayoutDashboard, Settings, Loader2, Sun, Moon, Map as MapIcon, List, Edit2, Trash2, Key, CreditCard, ExternalLink, RefreshCw } from 'lucide-react';
 
 // --- Theme Component ---
 const ThemeToggle = () => {
@@ -632,11 +632,7 @@ const OwnerDashboard = ({ user, onUpdateUser, onLogout }: { user: VehicleOwner, 
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   
-  // Safe Expiry Check: If date is missing/invalid, treat as expired (unless free logic is handled by backend, but backend sets "" for expired)
-  const expiryDate = new Date(user.expiresAt);
-  const isValidDate = !isNaN(expiryDate.getTime());
-  const daysLeft = isValidDate ? Math.ceil((expiryDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)) : 0;
-  const isExpired = !isValidDate || daysLeft <= 0;
+  const isExpired = new Date(user.expiresAt) < new Date();
 
   const toggleStatus = async () => {
     if (isExpired) {
@@ -673,6 +669,8 @@ const OwnerDashboard = ({ user, onUpdateUser, onLogout }: { user: VehicleOwner, 
     }
     setIsToggling(false);
   };
+
+  const daysLeft = Math.ceil((new Date(user.expiresAt).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 transition-colors duration-300">
@@ -718,35 +716,12 @@ const OwnerDashboard = ({ user, onUpdateUser, onLogout }: { user: VehicleOwner, 
           </Button>
         </Card>
 
-        {/* Ride Activity Placeholder */}
-        <div className="grid grid-cols-2 gap-4">
-            <Card className="p-4 flex flex-col justify-between">
-               <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Profile Views</p>
-                  <p className="text-2xl font-bold dark:text-white mt-1">--</p>
-               </div>
-            </Card>
-            <Card className="p-4 flex flex-col justify-between">
-               <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Active Rides</p>
-                  <p className="text-2xl font-bold dark:text-white mt-1">--</p>
-               </div>
-            </Card>
-        </div>
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl text-sm text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800 flex gap-3">
-          <BarChart3 className="shrink-0" size={20}/>
-          <div>
-            <p className="font-semibold mb-1">Ride Tracking</p>
-            <p className="text-xs opacity-90">Automated tracking is in development. Currently, riders will contact you directly via phone call.</p>
-          </div>
-        </div>
-
         <Card className="p-4">
           <h3 className="font-bold text-slate-900 dark:text-white mb-2">Subscription</h3>
           <div className="flex justify-between items-end">
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400">Status</p>
-              <p className={`font-medium ${isExpired ? 'text-amber-600 dark:text-amber-500' : 'text-green-600 dark:text-green-500'}`}>{!isExpired ? 'Active' : 'Expired'}</p>
+              <p className={`font-medium ${daysLeft < 7 ? 'text-amber-600 dark:text-amber-500' : 'text-green-600 dark:text-green-500'}`}>{daysLeft > 0 ? 'Active' : 'Expired'}</p>
             </div>
             <div className="flex flex-col items-end gap-2">
                <div className="text-right">
@@ -818,10 +793,8 @@ const RiderDashboard = ({ user, onUpdateUser, onLogout }: { user: Rider, onUpdat
   }, [view, fetchVehicles]);
 
   // Subscription Logic
-  const expiryDate = new Date(user.expiresAt);
-  const isValidDate = !isNaN(expiryDate.getTime());
-  const daysLeft = isValidDate ? Math.ceil((expiryDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)) : 0;
-  const isExpired = !isValidDate || daysLeft <= 0;
+  const daysLeft = Math.ceil((new Date(user.expiresAt).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+  const isExpired = daysLeft <= 0;
 
   // Helper to position pins on the mock map (relative to DEFAULT_LAT/LNG)
   const getMapMarkerStyle = (lat: number, lng: number) => {

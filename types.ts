@@ -8,8 +8,7 @@ export enum VehicleType {
   AUTO = 'Auto Rickshaw',
   BIKE = 'Bike',
   CAR = 'Car',
-  SUV = 'SUV',
-  TAXI='TAXI'
+  SUV = 'SUV'
 }
 
 export interface BaseArea {
