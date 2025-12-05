@@ -4,7 +4,6 @@ import { ApiService } from './services/mockBackend';
 import { Button, Input, Card, Modal, Select } from './components/ui';
 import { APP_NAME, CURRENCY_SYMBOL, SUBSCRIPTION_COST, SUBSCRIPTION_DAYS, DEFAULT_LAT, DEFAULT_LNG, VEHICLE_IMAGES } from './constants';
 import { MapPin, Navigation, Phone, Menu, X, CheckCircle, AlertTriangle, LogOut, Car, LayoutDashboard, Settings, Loader2, Sun, Moon, Map as MapIcon, List, Edit2, Trash2, Key, CreditCard } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 // --- Theme Component ---
 const ThemeToggle = () => {
