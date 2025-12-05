@@ -1,0 +1,7 @@
+{
+  "name": "SimbengRide",
+  "description": "A mobile-first ride-hailing app connecting riders with local vehicle owners.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
