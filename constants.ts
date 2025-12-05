@@ -17,4 +17,5 @@ export const VEHICLE_IMAGES: Record<VehicleType, string> = {
   [VehicleType.BIKE]: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&q=80&w=200&h=150",
   [VehicleType.CAR]: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=200&h=150",
   [VehicleType.SUV]: "https://images.unsplash.com/photo-1533473359331-0135ef1bcfb0?auto=format&fit=crop&q=80&w=200&h=150",
+  [VehicleType.TAXI]: "https://images.unsplash.com/photo-1559136555-930d72f18615?auto=format&fit=crop&q=80&w=200&h=150",
 };

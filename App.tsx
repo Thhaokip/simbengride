@@ -1068,4 +1068,13 @@ const App = () => {
         return user ? <OwnerDashboard user={user as VehicleOwner} onUpdateUser={handleUpdateUser} onLogout={handleLogout} /> : <LandingView onNavigate={setView} />;
       
       case 'dashboard-rider': 
-        return user ? <RiderDashboard user={user as Rider} onUpdateUser={handleUpdateUser
+        return user ? <RiderDashboard user={user as Rider} onUpdateUser={handleUpdateUser} onLogout={handleLogout} /> : <LandingView onNavigate={setView} />;
+        
+      default: return <LandingView onNavigate={setView} />;
+    }
+  };
+
+  return <>{renderView()}</>;
+};
+
+export default App;
